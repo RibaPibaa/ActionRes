@@ -1,3 +1,4 @@
+
 name: Build Tactical Arena
 
 on:
@@ -11,6 +12,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -26,14 +28,45 @@ jobs:
         with:
           gradle-version: '8.8'
 
-      - name: Build Forge mod
+      - name: Find Gradle project
+        id: locate
+        shell: bash
+        run: |
+          PROJECT_FILE=$(find . \
+            -type f \
+            \( -name "settings.gradle" -o -name "settings.gradle.kts" \) \
+            -not -path "*/.git/*" \
+            -not -path "*/.gradle/*" \
+            | head -n 1)
+
+          if [ -z "$PROJECT_FILE" ]; then
+            PROJECT_FILE=$(find . \
+              -type f \
+              \( -name "build.gradle" -o -name "build.gradle.kts" \) \
+              -not -path "*/.git/*" \
+              -not -path "*/.gradle/*" \
+              | head -n 1)
+          fi
+
+          if [ -z "$PROJECT_FILE" ]; then
+            echo "ERROR: Gradle project not found!"
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$PROJECT_FILE")
+          echo "dir=$PROJECT_DIR" >> "$GITHUB_OUTPUT"
+
+          echo "Gradle project found in: $PROJECT_DIR"
+
+      - name: Build Tactical Arena
         run: gradle --no-daemon clean build
+        working-directory: ${{ steps.locate.outputs.dir }}
 
       - name: Upload mod JAR
         uses: actions/upload-artifact@v4
         with:
           name: TacticalArena-Forge-1.20.1
-          path: build/libs/TacticalArena-*.jar
+          path: ${{ steps.locate.outputs.dir }}/build/libs/TacticalArena-*.jar
           if-no-files-found: error
           retention-days: 30
 
@@ -42,9 +75,10 @@ jobs:
         with:
           name: TacticalArena-source
           path: |
-            src/
-            build.gradle
-            settings.gradle
-            gradle.properties
-            README.md
+            ${{ steps.locate.outputs.dir }}/src/
+            ${{ steps.locate.outputs.dir }}/build.gradle
+            ${{ steps.locate.outputs.dir }}/settings.gradle
+            ${{ steps.locate.outputs.dir }}/gradle.properties
+            ${{ steps.locate.outputs.dir }}/README.md
+          if-no-files-found: warn
           retention-days: 30
